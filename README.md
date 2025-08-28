@@ -1,41 +1,75 @@
-### **Important Instructions**:  
-- Click on *"Use this template"* button and *"Create a new repository"* in your github account for submission.
-<img width="1262" height="93" alt="Screenshot 2025-08-15 at 5 59 49 AM" src="https://github.com/user-attachments/assets/b72d5afd-ba07-4da1-ac05-a373b3168b6a" />
+#!/usr/bin/env python3
+"""
+generate_data.py
+Synthetic IQ dataset generator (toy simulator).
+Generates complex IQ frames for multiple "UAV" samples with simple parametric model:
+  s(t) = A * exp( j*(2*pi*fc*t + 2*pi*fd*t + phase) ) * steering(aoa)
+Outputs:
+  - data/sample_iq.npy : shape (N, num_rx, num_t) complex64
+  - data/labels.npy    : shape (N, 3) -> [range_m, vel_mps, aoa_deg]
+"""
 
-- Add one of the following open source licenses - [MIT](https://opensource.org/licenses/MIT), [Apache 2.0](https://opensource.org/licenses/Apache-2.0) or [BSD 3-Clause](https://opensource.org/licenses/BSD-3-Clause) to your submission repository. 
-- Once your repository is ready for **evaluation** send an email to ennovatex.io@samsung.com with the subject - "AI Challenge Submission - Team name" and the body of the email must contain only the Team Name, Team Leader Name & your GitHub project repository link.
-- All submission project materials outlined below must be added to the github repository and nothing should be attached in the submission email.
-- In case of any query, please feel free to reach out to us at ennovatex.io@samsung.com
+import argparse
+import os
+import numpy as np
 
-#### Evaluation Criteria
+def simulate_uav_echo(num_rx, num_t, fc=3e9, fs=1e6, rng_m=100.0, vel=10.0, aoa_deg=10.0, snr_db=20.0):
+    """
+    Very simplified narrowband model:
+    - simulate a complex exponential with Doppler shift proportional to velocity
+    - steering vector across num_rx (ULA with half-wavelength spacing)
+    - add AWGN
+    """
+    c = 3e8
+    lam = c / fc
+    # Doppler frequency (Hz) for radial velocity vel (m/s)
+    fd = 2 * vel / lam  # factor 2 because monostatic round-trip approx (toy)
+    t = np.arange(num_t) / fs
+    phase = np.random.uniform(0, 2*np.pi)
+    # baseband signal (complex sinusoid)
+    s = np.exp(1j*(2*np.pi*fd*t + phase)).astype(np.complex64)  # shape (num_t,)
+    # steering vector (ULA)
+    aoa_rad = np.deg2rad(aoa_deg)
+    element_pos = np.arange(num_rx)
+    steering = np.exp(-1j * 2*np.pi * element_pos * (np.sin(aoa_rad) * (lam/2) / lam))
+    steering = steering.astype(np.complex64)  # shape (num_rx,)
+    # tile to RX x time
+    iq = (steering[:, None] * s[None, :])
+    # scale by 1/range^2 (toy RCS) and amplitude
+    amplitude = 1.0 / (rng_m**2 + 1e-6)
+    iq *= amplitude
+    # add noise for given SNR
+    sig_pow = np.mean(np.abs(iq)**2)
+    snr_lin = 10**(snr_db/10)
+    noise_pow = sig_pow / snr_lin
+    noise = (np.sqrt(noise_pow/2) * (np.random.randn(*iq.shape) + 1j*np.random.randn(*iq.shape))).astype(np.complex64)
+    iq_noisy = iq + noise
+    return iq_noisy
 
-| Project Aspect | % |
-| --- | --- |
-| Novelty of Approach | 25% |
-| Technical implementation & Documentation | 25% |
-| UI/UX Design or User Interaction Design | 15% |
-| Ethical Considerations & Scalability | 10% |
-| Demo Video (10 mins max) | 25% |
+def generate_dataset(out_dir="data", num_samples=1000, num_rx=8, num_t=256, seed=0):
+    os.makedirs(out_dir, exist_ok=True)
+    rngs = np.random.uniform(20, 800, size=(num_samples,))   # meters
+    vels = np.random.uniform(-20, 20, size=(num_samples,))  # m/s (radial)
+    aoas = np.random.uniform(-60, 60, size=(num_samples,))  # degrees
+    snrs = np.random.uniform(5, 25, size=(num_samples,))
+    data = np.zeros((num_samples, num_rx, num_t), dtype=np.complex64)
+    labels = np.zeros((num_samples, 3), dtype=np.float32)
+    for i in range(num_samples):
+        iq = simulate_uav_echo(num_rx=num_rx, num_t=num_t, rng_m=rngs[i], vel=vels[i], aoa_deg=aoas[i], snr_db=snrs[i])
+        data[i] = iq
+        labels[i] = np.array([rngs[i], vels[i], aoas[i]], dtype=np.float32)
+        if (i+1) % 100 == 0:
+            print(f"[generate] {i+1}/{num_samples}")
+    np.save(os.path.join(out_dir, "sample_iq.npy"), data)
+    np.save(os.path.join(out_dir, "labels.npy"), labels)
+    print(f"[✓] Saved {num_samples} samples to {out_dir}")
 
-**-------------------------- Your Project README.md should start from here -----------------------------**
-
-# Samsung EnnovateX 2025 AI Challenge Submission
-
-- **Problem Statement** - *(Must exactly match one of the nine Samsung EnnovateX AI Challenge Problem Statements)*
-- **Team name** - *(As provided during the time of registration)*
-- **Team members (Names)** - *Member 1 Name*, *Member 2 Name*, *Member 3 Name*, *Member 4 Name* 
-- **Demo Video Link** - *(Upload the Demo video on Youtube as a public or unlisted video and share the link. Google Drive uploads or any other uploads are not allowed.)*
-
-
-### Project Artefacts
-
-- **Technical Documentation** - [Docs](docs) *(All technical details must be written in markdown files inside the docs folder in the repo)*
-- **Source Code** - [Source](src) *(All source code must be added to the src folder in the repo. The code must be capable of being successfully installed/executed and must run consistently on the intended platforms.)*
-- **Models Used** - *(Hugging Face links to all models used in the project. You are permitted to use open weight models.)*
-- **Models Published** - *(In case you have developed a model as a part of your solution, kindly upload it on Hugging Face under appropriate open source license and add the link here.)*
-- **Datasets Used** - *(Links to all datasets used in the project. You are permitted to use publicly available datasets under licenses like Creative Commons, Open Data Commons, or equivalent.)*
-- **Datasets Published** - *(Links to all datasets created for the project and published on Hugging Face. You are allowed to publish any synthetic or proprietary dataset used in their project, but will be responsible for any legal compliance and permission for the same. The dataset can be published under Creative Commons, Open Data Commons, or equivalent license.)*
-
-### Attribution 
-
-In case this project is built on top of an existing open source project, please provide the original project link here. Also, mention what new features were developed. Failing to attribute the source projects may lead to disqualification during the time of evaluation.
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Generate synthetic UAV IQ dataset (toy)")
+    parser.add_argument("--scenario", type=str, default="urban_macro", help="scenario name (informational)")
+    parser.add_argument("--num_samples", type=int, default=1000, help="number of samples to generate")
+    parser.add_argument("--out_dir", type=str, default="data", help="output directory")
+    parser.add_argument("--num_rx", type=int, default=8)
+    parser.add_argument("--num_t", type=int, default=256)
+    args = parser.parse_args()
+    generate_dataset(out_dir=args.out_dir, num_samples=args.num_samples, num_rx=args.num_rx, num_t=args.num_t)
