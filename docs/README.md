@@ -22,7 +22,7 @@ Our approach combines **standards-based channel modeling** with a **hybrid signa
 
 ---
 
-## 🏗Solution Architecture
+## Solution Architecture
      ┌─────────────────────┐
      │ 3GPP 38.901 Channel │
      │   (Rel-19, Sec 7.9) │
