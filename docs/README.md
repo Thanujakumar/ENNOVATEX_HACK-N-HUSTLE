@@ -1,3 +1,15 @@
+# Samsung EnnovateX 2025 AI Challenge Submission  
+
+**Problem Statement:** UAV Parameter Estimation with ISAC (Monostatic Sensing)  
+
+**Team Name:** Team HACK'N'HUSTLE
+
+**Team Members:**  
+- Thanuja M (Team Leader)  
+- Member 2 : Soujanya S
+- Member 3 : Priyadharshini M 
+  
+
 # UAV Parameter Estimation with ISAC (Monostatic Sensing)
 
 This repository contains our solution to **Problem Statement #7**:  
